@@ -12,8 +12,10 @@ import "hash/fnv"
 func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string) string) {
 	for true {
 		task := RequestTask()
-		runMapTask(task.FileName, mapf)
-		MarkTaskAsCompleted(task.FileName)
+		if task.FileName != "" {
+			runMapTask(task.FileName, mapf)
+			MarkTaskAsCompleted(task.FileName)
+		}
 	}
 }
 
