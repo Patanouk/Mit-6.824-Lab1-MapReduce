@@ -9,24 +9,6 @@ import "log"
 import "net/rpc"
 import "hash/fnv"
 
-//
-// Map functions return a slice of KeyValue.
-//
-type KeyValue struct {
-	Key   string
-	Value string
-}
-
-//
-// use ihash(key) % NReduce to choose the reduce
-// task number for each KeyValue emitted by Map.
-//
-func ihash(key string) int {
-	h := fnv.New32a()
-	h.Write([]byte(key))
-	return int(h.Sum32() & 0x7fffffff)
-}
-
 func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string) string) {
 	task := RequestTask()
 
@@ -61,6 +43,24 @@ func runMapTask(filePath string, mapf func(string, string) []KeyValue) {
 	kva := mapf(filePath, string(content))
 
 	log.Printf("Map Task result : %v", kva)
+}
+
+// KeyValue
+// Map functions return a slice of KeyValue.
+//
+type KeyValue struct {
+	Key   string
+	Value string
+}
+
+//
+// use ihash(key) % NReduce to choose the reduce
+// task number for each KeyValue emitted by Map.
+//
+func ihash(key string) int {
+	h := fnv.New32a()
+	h.Write([]byte(key))
+	return int(h.Sum32() & 0x7fffffff)
 }
 
 //
