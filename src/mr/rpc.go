@@ -7,7 +7,14 @@ type TaskRequest struct {
 }
 
 type TaskResponse struct {
+	FileName string
+}
+
+type TaskCompletedRequest struct {
 	FilePath string
+}
+
+type TaskCompletedResponse struct {
 }
 
 // Cook up a unique-ish UNIX-domain socket name

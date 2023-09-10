@@ -10,39 +10,42 @@ import "net/rpc"
 import "hash/fnv"
 
 func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string) string) {
-	task := RequestTask()
-
-	runMapTask(task.FilePath, mapf)
+	for true {
+		task := RequestTask()
+		runMapTask(task.FileName, mapf)
+		MarkTaskAsCompleted(task.FileName)
+	}
 }
 
 func RequestTask() *TaskResponse {
-
-	// declare an argument structure.
 	request := TaskRequest{}
 	reply := TaskResponse{}
-
 	// send the RPC request, wait for the reply.
 	call("Coordinator.RequestTask", &request, &reply)
-
 	return &reply
 }
 
-func runMapTask(filePath string, mapf func(string, string) []KeyValue) {
-	log.Printf("Starting map task for file %v", filePath)
-	file, err := os.Open(filePath)
+func MarkTaskAsCompleted(fileName string) {
+	request := TaskCompletedRequest{fileName}
+	reply := TaskCompletedResponse{}
+	call("Coordinator.MarkTaskAsCompleted", &request, &reply)
+}
+
+func runMapTask(fileName string, mapf func(string, string) []KeyValue) {
+	log.Printf("Starting map task for file %v", fileName)
+	file, err := os.Open(fileName)
 	if err != nil {
-		log.Fatalf("cannot open %v", filePath)
+		log.Fatalf("cannot open %v", fileName)
 	}
 
 	content, err := ioutil.ReadAll(file)
 	if err != nil {
-		log.Fatalf("cannot read %v", filePath)
+		log.Fatalf("cannot read %v", fileName)
 	}
 	file.Close()
 
-	kva := mapf(filePath, string(content))
+	mapf(fileName, string(content))
 
-	log.Printf("Map Task result : %v", kva)
 }
 
 // KeyValue

@@ -1,6 +1,9 @@
 package mr
 
-import "log"
+import (
+	"log"
+	"time"
+)
 import "net"
 import "os"
 import "net/rpc"
@@ -18,17 +21,33 @@ const (
 	Completed
 )
 
-// Your code here -- RPC handlers for the worker to call.
-
 // RequestTask an example RPC handler.
-// the RPC argument and reply types are defined in rpc.go.
 func (c *Coordinator) RequestTask(args *TaskRequest, reply *TaskResponse) error {
+	for {
+		fileName, found := c.searchForNewTask()
+		if found {
+			reply.FileName = fileName
+			return nil
+		} else {
+			time.Sleep(time.Second)
+		}
+	}
+}
+
+func (c *Coordinator) searchForNewTask() (fileName string, found bool) {
 	for fileName, taskStatus := range c.mapTasks {
 		if taskStatus == Idle {
-			reply.FilePath = fileName
+			log.Printf("Sending map file %v to a worker", fileName)
+			return fileName, true
 		}
 	}
 
+	return "", false
+}
+
+func (c *Coordinator) MarkTaskAsCompleted(args *TaskCompletedRequest, reply *TaskCompletedResponse) error {
+	log.Printf("Marking map task %v as completed", args.FilePath)
+	c.mapTasks[args.FilePath] = Completed
 	return nil
 }
 
@@ -70,7 +89,12 @@ func (c *Coordinator) server() {
 // if the entire job has finished.
 //
 func (c *Coordinator) Done() bool {
-	return allTasksCompleted(c.mapTasks)
+	completed := allTasksCompleted(c.mapTasks)
+	if completed {
+		log.Printf("All tasks completed. Shutting down coordinator")
+	}
+
+	return completed
 }
 
 func allTasksCompleted(input map[string]TaskStatus) bool {
