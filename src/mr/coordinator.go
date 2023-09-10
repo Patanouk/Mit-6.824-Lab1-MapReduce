@@ -6,24 +6,48 @@ import "os"
 import "net/rpc"
 import "net/http"
 
-
 type Coordinator struct {
-	// Your definitions here.
-
+	mapTasks map[string]TaskStatus
 }
+
+type TaskStatus int
+
+const (
+	Idle TaskStatus = iota
+	InProgress
+	Completed
+)
 
 // Your code here -- RPC handlers for the worker to call.
 
-//
-// an example RPC handler.
-//
+// RequestTask an example RPC handler.
 // the RPC argument and reply types are defined in rpc.go.
-//
-func (c *Coordinator) Example(args *ExampleArgs, reply *ExampleReply) error {
-	reply.Y = args.X + 1
+func (c *Coordinator) RequestTask(args *TaskRequest, reply *TaskResponse) error {
+	for fileName, taskStatus := range c.mapTasks {
+		if taskStatus == Idle {
+			reply.FilePath = fileName
+		}
+	}
+
 	return nil
 }
 
+// MakeCoordinator
+// create a Coordinator.
+// main/mrcoordinator.go calls this function.
+// nReduce is the number of reduce tasks to use.
+//
+func MakeCoordinator(files []string, nReduce int) *Coordinator {
+	mapTasks := make(map[string]TaskStatus)
+	for _, file := range files {
+		mapTasks[file] = Idle
+	}
+	log.Printf("Created %d map tasks", len(files))
+
+	c := Coordinator{mapTasks: mapTasks}
+	c.server()
+	return &c
+}
 
 //
 // start a thread that listens for RPCs from worker.go
@@ -41,30 +65,20 @@ func (c *Coordinator) server() {
 	go http.Serve(l, nil)
 }
 
-//
+// Done
 // main/mrcoordinator.go calls Done() periodically to find out
 // if the entire job has finished.
 //
 func (c *Coordinator) Done() bool {
-	ret := false
-
-	// Your code here.
-
-
-	return ret
+	return allTasksCompleted(c.mapTasks)
 }
 
-//
-// create a Coordinator.
-// main/mrcoordinator.go calls this function.
-// nReduce is the number of reduce tasks to use.
-//
-func MakeCoordinator(files []string, nReduce int) *Coordinator {
-	c := Coordinator{}
+func allTasksCompleted(input map[string]TaskStatus) bool {
+	for _, value := range input {
+		if value != Completed {
+			return false
+		}
+	}
 
-	// Your code here.
-
-
-	c.server()
-	return &c
+	return true
 }

@@ -1,10 +1,13 @@
 package mr
 
-import "fmt"
+import (
+	"fmt"
+	"io/ioutil"
+	"os"
+)
 import "log"
 import "net/rpc"
 import "hash/fnv"
-
 
 //
 // Map functions return a slice of KeyValue.
@@ -24,47 +27,40 @@ func ihash(key string) int {
 	return int(h.Sum32() & 0x7fffffff)
 }
 
+func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string) string) {
+	task := RequestTask()
 
-//
-// main/mrworker.go calls this function.
-//
-func Worker(mapf func(string, string) []KeyValue,
-	reducef func(string, []string) string) {
-
-	// Your worker implementation here.
-
-	// uncomment to send the Example RPC to the coordinator.
-	// CallExample()
-
+	runMapTask(task.FilePath, mapf)
 }
 
-//
-// example function to show how to make an RPC call to the coordinator.
-//
-// the RPC argument and reply types are defined in rpc.go.
-//
-func CallExample() {
+func RequestTask() *TaskResponse {
 
 	// declare an argument structure.
-	args := ExampleArgs{}
-
-	// fill in the argument(s).
-	args.X = 99
-
-	// declare a reply structure.
-	reply := ExampleReply{}
+	request := TaskRequest{}
+	reply := TaskResponse{}
 
 	// send the RPC request, wait for the reply.
-	// the "Coordinator.Example" tells the
-	// receiving server that we'd like to call
-	// the Example() method of struct Coordinator.
-	ok := call("Coordinator.Example", &args, &reply)
-	if ok {
-		// reply.Y should be 100.
-		fmt.Printf("reply.Y %v\n", reply.Y)
-	} else {
-		fmt.Printf("call failed!\n")
+	call("Coordinator.RequestTask", &request, &reply)
+
+	return &reply
+}
+
+func runMapTask(filePath string, mapf func(string, string) []KeyValue) {
+	log.Printf("Starting map task for file %v", filePath)
+	file, err := os.Open(filePath)
+	if err != nil {
+		log.Fatalf("cannot open %v", filePath)
 	}
+
+	content, err := ioutil.ReadAll(file)
+	if err != nil {
+		log.Fatalf("cannot read %v", filePath)
+	}
+	file.Close()
+
+	kva := mapf(filePath, string(content))
+
+	log.Printf("Map Task result : %v", kva)
 }
 
 //
