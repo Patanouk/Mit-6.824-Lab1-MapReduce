@@ -10,7 +10,13 @@ import "net/rpc"
 import "net/http"
 
 type Coordinator struct {
-	mapTasks map[string]TaskStatus
+	mapTasks []MapTask
+}
+
+type MapTask struct {
+	fileName string
+	status   TaskStatus
+	nReduce  int
 }
 
 type TaskStatus int
@@ -24,9 +30,13 @@ const (
 // RequestTask an example RPC handler.
 func (c *Coordinator) RequestTask(args *TaskRequest, reply *TaskResponse) error {
 	for {
-		fileName, found := c.searchForNewTask()
+		task, taskNumber, found := c.searchForNewTask()
 		if found {
-			reply.FileName = fileName
+			reply.TaskNumber = taskNumber
+			reply.FileName = task.fileName
+			reply.NReduce = task.nReduce
+
+			c.mapTasks[taskNumber].status = InProgress
 			return nil
 		} else {
 			time.Sleep(time.Second)
@@ -34,20 +44,20 @@ func (c *Coordinator) RequestTask(args *TaskRequest, reply *TaskResponse) error 
 	}
 }
 
-func (c *Coordinator) searchForNewTask() (fileName string, found bool) {
-	for fileName, taskStatus := range c.mapTasks {
-		if taskStatus == Idle {
-			log.Printf("Sending map file %v to a worker", fileName)
-			return fileName, true
+func (c *Coordinator) searchForNewTask() (task *MapTask, taskNumber int, found bool) {
+	for i, task := range c.mapTasks {
+		if task.status == Idle {
+			log.Printf("Sending map task %v to a worker", task)
+			return &task, i, true
 		}
 	}
 
-	return "", false
+	return nil, 0, false
 }
 
 func (c *Coordinator) MarkTaskAsCompleted(args *TaskCompletedRequest, reply *TaskCompletedResponse) error {
-	log.Printf("Marking map task %v as completed", args.FilePath)
-	c.mapTasks[args.FilePath] = Completed
+	log.Printf("Marking map task %v as completed", args.taskNumber)
+	c.mapTasks[args.taskNumber].status = Completed
 	return nil
 }
 
@@ -57,9 +67,9 @@ func (c *Coordinator) MarkTaskAsCompleted(args *TaskCompletedRequest, reply *Tas
 // nReduce is the number of reduce tasks to use.
 //
 func MakeCoordinator(files []string, nReduce int) *Coordinator {
-	mapTasks := make(map[string]TaskStatus)
-	for _, file := range files {
-		mapTasks[file] = Idle
+	mapTasks := make([]MapTask, len(files))
+	for i, file := range files {
+		mapTasks[i] = MapTask{file, Idle, nReduce}
 	}
 	log.Printf("Created %d map tasks", len(files))
 
@@ -97,9 +107,9 @@ func (c *Coordinator) Done() bool {
 	return completed
 }
 
-func allTasksCompleted(input map[string]TaskStatus) bool {
+func allTasksCompleted(input []MapTask) bool {
 	for _, value := range input {
-		if value != Completed {
+		if value.status != Completed {
 			return false
 		}
 	}

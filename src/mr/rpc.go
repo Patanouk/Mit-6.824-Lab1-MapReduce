@@ -7,11 +7,13 @@ type TaskRequest struct {
 }
 
 type TaskResponse struct {
-	FileName string
+	TaskNumber int
+	FileName   string
+	NReduce    int
 }
 
 type TaskCompletedRequest struct {
-	FilePath string
+	taskNumber int
 }
 
 type TaskCompletedResponse struct {

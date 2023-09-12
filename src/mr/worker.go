@@ -1,6 +1,7 @@
 package mr
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -12,42 +13,101 @@ import "hash/fnv"
 func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string) string) {
 	for true {
 		task := RequestTask()
+
 		if task.FileName != "" {
-			runMapTask(task.FileName, mapf)
-			MarkTaskAsCompleted(task.FileName)
+			runMapTask(task, mapf)
+			MarkTaskAsCompleted(task.TaskNumber)
 		}
 	}
 }
 
 func RequestTask() *TaskResponse {
 	request := TaskRequest{}
-	reply := TaskResponse{}
+	response := TaskResponse{}
 	// send the RPC request, wait for the reply.
-	call("Coordinator.RequestTask", &request, &reply)
-	return &reply
+	call("Coordinator.RequestTask", &request, &response)
+	return &response
 }
 
-func MarkTaskAsCompleted(fileName string) {
-	request := TaskCompletedRequest{fileName}
+func MarkTaskAsCompleted(taskNumber int) {
+	request := TaskCompletedRequest{taskNumber}
 	reply := TaskCompletedResponse{}
 	call("Coordinator.MarkTaskAsCompleted", &request, &reply)
 }
 
-func runMapTask(fileName string, mapf func(string, string) []KeyValue) {
-	log.Printf("Starting map task for file %v", fileName)
-	file, err := os.Open(fileName)
+func runMapTask(task *TaskResponse, mapf func(string, string) []KeyValue) {
+	log.Printf("Starting map task for file %v", task.FileName)
+
+	fileContent := readFileContent(task.FileName)
+	keyValues := mapf(task.FileName, string(fileContent))
+	partionedKeyValues := partition(keyValues, task.NReduce)
+
+	writeToFiles(partionedKeyValues, task.TaskNumber)
+}
+
+func writeToFiles(partionedKeyValues [][]KeyValue, taskNumber int) {
+	tempFiles := make([]string, len(partionedKeyValues))
+
+	for i, keyValues := range partionedKeyValues {
+		tempFileName := fmt.Sprintf("mr-%d-%d-temp", taskNumber, i)
+		log.Printf("Writing to temp file %v", tempFileName)
+		err := writeKeyValuesToTempFile(tempFileName, keyValues)
+		if err != nil {
+			log.Fatalf("Failed to sync file %v to disk", tempFileName)
+		}
+		tempFiles[i] = tempFileName
+
+		//Rename the file to make sure the end file has the full content of the map task
+		err = os.Rename(tempFileName, fmt.Sprintf("mr-%d-%d", taskNumber, i))
+		if err != nil {
+			log.Fatalf("Failed to rename file %v", tempFileName)
+		}
+	}
+}
+
+func writeKeyValuesToTempFile(tempFileName string, keyValues []KeyValue) error {
+	tempFile, err := os.Create(tempFileName)
+	if err != nil {
+		log.Fatalf("cannot open file %v, error %v", tempFileName, err)
+	}
+	defer tempFile.Close()
+
+	enc := json.NewEncoder(tempFile)
+
+	for _, keyValue := range keyValues {
+		err := enc.Encode(&keyValue)
+		if err != nil {
+			log.Fatalf("failed to encode kv in file %v", tempFileName)
+		}
+	}
+
+	return tempFile.Sync()
+}
+
+func readFileContent(fileName string) []byte {
+	file, err := os.Create(fileName)
 	if err != nil {
 		log.Fatalf("cannot open %v", fileName)
 	}
+	defer file.Close()
 
 	content, err := ioutil.ReadAll(file)
 	if err != nil {
 		log.Fatalf("cannot read %v", fileName)
 	}
-	file.Close()
 
-	mapf(fileName, string(content))
+	return content
+}
 
+func partition(keyValues []KeyValue, nReduce int) [][]KeyValue {
+	result := make([][]KeyValue, nReduce)
+
+	for _, keyValue := range keyValues {
+		partitionNumber := ihash(keyValue.Key) % nReduce
+		result[partitionNumber] = append(result[partitionNumber], keyValue)
+	}
+
+	return result
 }
 
 // KeyValue
@@ -59,7 +119,7 @@ type KeyValue struct {
 }
 
 //
-// use ihash(key) % NReduce to choose the reduce
+// use ihash(key) % nReduce to choose the reduce
 // task number for each KeyValue emitted by Map.
 //
 func ihash(key string) int {
