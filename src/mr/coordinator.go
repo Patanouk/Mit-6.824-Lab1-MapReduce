@@ -50,7 +50,7 @@ func (c *Coordinator) RequestTask(args *TaskRequest, reply *TaskResponse) error 
 			c.lock.Unlock()
 
 			return nil
-		} else if task, taskNumber, found := c.searchForReduceTask(); found == true {
+		} else if task, taskNumber, found := c.searchForReduceTask(); c.allMapTasksCompleted() && found == true {
 			reply.TaskNumber = taskNumber
 			reply.TaskType = Reduce
 			reply.ReduceFileList = task.fileNames
