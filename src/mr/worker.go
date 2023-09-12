@@ -14,13 +14,13 @@ func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string)
 		log.Printf("Requesting for a task")
 		task := RequestTask()
 
-		if task.FileName != "" {
+		switch task.TaskType {
+		case Map:
+			reduceFiles := runMapTask(task, mapf)
+			MarkTaskAsCompleted(task, reduceFiles)
 
-			switch task.TaskType {
-			case Map:
-				reduceFiles := runMapTask(task, mapf)
-				MarkTaskAsCompleted(task, reduceFiles)
-			}
+		case Reduce:
+			log.Printf("Received reduce task %v", task)
 		}
 	}
 }

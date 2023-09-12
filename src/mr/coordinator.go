@@ -39,17 +39,26 @@ const (
 // RequestTask an example RPC handler.
 func (c *Coordinator) RequestTask(args *TaskRequest, reply *TaskResponse) error {
 	for {
-		c.lock.Lock()
-		task, taskNumber, found := c.searchForMapTask()
-		if found {
+		if task, taskNumber, found := c.searchForMapTask(); found == true {
 			reply.TaskNumber = taskNumber
 			reply.FileName = task.fileName
 			reply.NReduce = task.nReduce
 			reply.TaskType = Map
 
+			c.lock.Lock()
 			c.mapTasks[taskNumber].status = InProgress
+			c.lock.Unlock()
 
 			return nil
+		} else if task, taskNumber, found := c.searchForReduceTask(); found == true {
+			reply.TaskNumber = taskNumber
+			reply.TaskType = Reduce
+			reply.ReduceFileList = task.fileNames
+
+			c.lock.Lock()
+			c.reduceTasks[taskNumber].status = InProgress
+			c.lock.Unlock()
+
 		} else {
 			log.Printf("No new task to give. Will search again in one second")
 			time.Sleep(time.Second)
@@ -58,9 +67,26 @@ func (c *Coordinator) RequestTask(args *TaskRequest, reply *TaskResponse) error 
 }
 
 func (c *Coordinator) searchForMapTask() (task *MapTask, taskNumber int, found bool) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
 	for i, task := range c.mapTasks {
 		if task.status == Idle {
 			log.Printf("Sending map task %v to a worker", task)
+			return &task, i, true
+		}
+	}
+
+	return nil, 0, false
+}
+
+func (c *Coordinator) searchForReduceTask() (*ReduceTask, int, bool) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
+	for i, task := range c.reduceTasks {
+		if task.status == Idle {
+			log.Printf("Sending reduce task %v to a worker", task)
 			return &task, i, true
 		}
 	}
