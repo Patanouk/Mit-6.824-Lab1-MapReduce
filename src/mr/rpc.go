@@ -11,6 +11,8 @@ type TaskResponse struct {
 	TaskNumber int
 	FileName   string
 	NReduce    int
+	//This field is only populated in case of a reduce task
+	ReduceFileList []string
 }
 
 type TaskCompletedRequest struct {

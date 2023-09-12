@@ -39,28 +39,25 @@ const (
 // RequestTask an example RPC handler.
 func (c *Coordinator) RequestTask(args *TaskRequest, reply *TaskResponse) error {
 	for {
-		task, taskNumber, found := c.searchForNewTask()
+		c.lock.Lock()
+		task, taskNumber, found := c.searchForMapTask()
 		if found {
 			reply.TaskNumber = taskNumber
 			reply.FileName = task.fileName
 			reply.NReduce = task.nReduce
 			reply.TaskType = Map
 
-			c.lock.Lock()
 			c.mapTasks[taskNumber].status = InProgress
-			c.lock.Unlock()
 
 			return nil
 		} else {
+			log.Printf("No new task to give. Will search again in one second")
 			time.Sleep(time.Second)
 		}
 	}
 }
 
-func (c *Coordinator) searchForNewTask() (task *MapTask, taskNumber int, found bool) {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-
+func (c *Coordinator) searchForMapTask() (task *MapTask, taskNumber int, found bool) {
 	for i, task := range c.mapTasks {
 		if task.status == Idle {
 			log.Printf("Sending map task %v to a worker", task)
@@ -134,7 +131,7 @@ func (c *Coordinator) Done() bool {
 	c.lock.RLock()
 	c.lock.RUnlock()
 
-	completed := allTasksCompleted(c.mapTasks)
+	completed := c.allMapTasksCompleted() && c.allReduceTasksCompleted()
 	if completed {
 		log.Printf("All tasks completed. Shutting down coordinator")
 	}
@@ -142,8 +139,18 @@ func (c *Coordinator) Done() bool {
 	return completed
 }
 
-func allTasksCompleted(input []MapTask) bool {
-	for _, value := range input {
+func (c *Coordinator) allMapTasksCompleted() bool {
+	for _, value := range c.mapTasks {
+		if value.status != Completed {
+			return false
+		}
+	}
+
+	return true
+}
+
+func (c *Coordinator) allReduceTasksCompleted() bool {
+	for _, value := range c.reduceTasks {
 		if value.status != Completed {
 			return false
 		}
