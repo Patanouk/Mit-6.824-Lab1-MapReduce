@@ -11,8 +11,15 @@ import "net/rpc"
 import "net/http"
 
 type Coordinator struct {
-	mapTasks []MapTask
-	lock     *sync.RWMutex
+	mapTasks    []MapTask
+	reduceTasks []ReduceTask
+
+	lock *sync.RWMutex
+}
+
+type ReduceTask struct {
+	fileNames []string
+	status    TaskStatus
 }
 
 type MapTask struct {
@@ -37,6 +44,7 @@ func (c *Coordinator) RequestTask(args *TaskRequest, reply *TaskResponse) error 
 			reply.TaskNumber = taskNumber
 			reply.FileName = task.fileName
 			reply.NReduce = task.nReduce
+			reply.TaskType = Map
 
 			c.lock.Lock()
 			c.mapTasks[taskNumber].status = InProgress
@@ -67,8 +75,15 @@ func (c *Coordinator) MarkTaskAsCompleted(args *TaskCompletedRequest, reply *Tas
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	log.Printf("Marking map task %v as completed", args.TaskNumber)
-	c.mapTasks[args.TaskNumber].status = Completed
+	switch args.TaskType {
+	case Map:
+		log.Printf("Marking map task %v as completed", args.TaskNumber)
+		c.mapTasks[args.TaskNumber].status = Completed
+		for i, reduceFile := range args.ReduceFiles {
+			c.reduceTasks[i].fileNames = append(c.reduceTasks[i].fileNames, reduceFile)
+		}
+
+	}
 	return nil
 }
 
@@ -82,9 +97,15 @@ func MakeCoordinator(files []string, nReduce int) *Coordinator {
 	for i, file := range files {
 		mapTasks[i] = MapTask{file, Idle, nReduce}
 	}
+
+	reduceTasks := make([]ReduceTask, nReduce)
+	for i := 0; i < nReduce; i++ {
+		reduceTasks[i] = ReduceTask{status: Idle}
+	}
+
 	log.Printf("Created %d map tasks", len(files))
 
-	c := Coordinator{mapTasks: mapTasks, lock: &sync.RWMutex{}}
+	c := Coordinator{mapTasks: mapTasks, reduceTasks: reduceTasks, lock: &sync.RWMutex{}}
 	c.server()
 	return &c
 }

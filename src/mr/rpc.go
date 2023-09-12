@@ -7,17 +7,27 @@ type TaskRequest struct {
 }
 
 type TaskResponse struct {
+	TaskType   TaskType
 	TaskNumber int
 	FileName   string
 	NReduce    int
 }
 
 type TaskCompletedRequest struct {
-	TaskNumber int
+	TaskType    TaskType
+	TaskNumber  int
+	ReduceFiles []string
 }
 
 type TaskCompletedResponse struct {
 }
+
+type TaskType int
+
+const (
+	Map TaskType = iota
+	Reduce
+)
 
 // Cook up a unique-ish UNIX-domain socket name
 // in /var/tmp, for the coordinator.

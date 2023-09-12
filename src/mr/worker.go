@@ -14,8 +14,12 @@ func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string)
 		task := RequestTask()
 
 		if task.FileName != "" {
-			runMapTask(task, mapf)
-			MarkTaskAsCompleted(task.TaskNumber)
+
+			switch task.TaskType {
+			case Map:
+				reduceFiles := runMapTask(task, mapf)
+				MarkTaskAsCompleted(task, reduceFiles)
+			}
 		}
 	}
 }
@@ -28,24 +32,24 @@ func RequestTask() *TaskResponse {
 	return &response
 }
 
-func MarkTaskAsCompleted(taskNumber int) {
-	request := TaskCompletedRequest{taskNumber}
+func MarkTaskAsCompleted(task *TaskResponse, reduceFiles []string) {
+	request := TaskCompletedRequest{task.TaskType, task.TaskNumber, reduceFiles}
 	reply := TaskCompletedResponse{}
 	call("Coordinator.MarkTaskAsCompleted", &request, &reply)
 }
 
-func runMapTask(task *TaskResponse, mapf func(string, string) []KeyValue) {
+func runMapTask(task *TaskResponse, mapf func(string, string) []KeyValue) []string {
 	log.Printf("Starting map task for file %v", task.FileName)
 
 	fileContent := readFileContent(task.FileName)
 	keyValues := mapf(task.FileName, string(fileContent))
 	partionedKeyValues := partition(keyValues, task.NReduce)
 
-	writeToFiles(partionedKeyValues, task.TaskNumber)
+	return writeToFiles(partionedKeyValues, task.TaskNumber)
 }
 
-func writeToFiles(partionedKeyValues [][]KeyValue, taskNumber int) {
-	tempFiles := make([]string, len(partionedKeyValues))
+func writeToFiles(partionedKeyValues [][]KeyValue, taskNumber int) []string {
+	reduceFiles := make([]string, len(partionedKeyValues))
 
 	for i, keyValues := range partionedKeyValues {
 		tempFileName := fmt.Sprintf("mr-%d-%d-temp", taskNumber, i)
@@ -54,14 +58,17 @@ func writeToFiles(partionedKeyValues [][]KeyValue, taskNumber int) {
 		if err != nil {
 			log.Fatalf("Failed to sync file %v to disk", tempFileName)
 		}
-		tempFiles[i] = tempFileName
 
 		//Rename the file to make sure the end file has the full content of the map task
-		err = os.Rename(tempFileName, fmt.Sprintf("mr-%d-%d", taskNumber, i))
+		reduceFileName := fmt.Sprintf("mr-%d-%d", taskNumber, i)
+		err = os.Rename(tempFileName, reduceFileName)
+		reduceFiles[i] = reduceFileName
 		if err != nil {
 			log.Fatalf("Failed to rename file %v", tempFileName)
 		}
 	}
+
+	return reduceFiles
 }
 
 func writeKeyValuesToTempFile(tempFileName string, keyValues []KeyValue) error {
