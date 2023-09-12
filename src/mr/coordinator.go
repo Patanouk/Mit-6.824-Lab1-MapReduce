@@ -10,6 +10,8 @@ import "os"
 import "net/rpc"
 import "net/http"
 
+var DefaultTimeout = 10 * time.Second
+
 type Coordinator struct {
 	mapTasks    []MapTask
 	reduceTasks []ReduceTask
@@ -49,6 +51,7 @@ func (c *Coordinator) RequestTask(args *TaskRequest, reply *TaskResponse) error 
 			c.mapTasks[taskNumber].status = InProgress
 			c.lock.Unlock()
 
+			time.AfterFunc(DefaultTimeout, func() { unlockMapTaskIfNecessary(&c.mapTasks[taskNumber]) })
 			return nil
 		} else if task, taskNumber, found := c.searchForReduceTask(); c.allMapTasksCompleted() && found == true {
 			reply.TaskNumber = taskNumber
@@ -59,10 +62,24 @@ func (c *Coordinator) RequestTask(args *TaskRequest, reply *TaskResponse) error 
 			c.reduceTasks[taskNumber].status = InProgress
 			c.lock.Unlock()
 
+			time.AfterFunc(DefaultTimeout, func() { unlockReduceTaskIfNecessary(&c.reduceTasks[taskNumber]) })
+			return nil
 		} else {
 			log.Printf("No new task to give. Will search again in one second")
 			time.Sleep(time.Second)
 		}
+	}
+}
+
+func unlockReduceTaskIfNecessary(task *ReduceTask) {
+	if task.status == InProgress {
+		task.status = Idle
+	}
+}
+
+func unlockMapTaskIfNecessary(task *MapTask) {
+	if task.status == InProgress {
+		task.status = Idle
 	}
 }
 
