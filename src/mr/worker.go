@@ -3,7 +3,6 @@ package mr
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 )
 import "log"
@@ -85,13 +84,7 @@ func writeKeyValuesToTempFile(tempFileName string, keyValues []KeyValue) error {
 }
 
 func readFileContent(fileName string) []byte {
-	file, err := os.Create(fileName)
-	if err != nil {
-		log.Fatalf("cannot open %v", fileName)
-	}
-	defer file.Close()
-
-	content, err := ioutil.ReadAll(file)
+	content, err := os.ReadFile(fileName)
 	if err != nil {
 		log.Fatalf("cannot read %v", fileName)
 	}

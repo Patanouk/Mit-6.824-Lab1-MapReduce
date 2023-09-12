@@ -13,7 +13,7 @@ type TaskResponse struct {
 }
 
 type TaskCompletedRequest struct {
-	taskNumber int
+	TaskNumber int
 }
 
 type TaskCompletedResponse struct {

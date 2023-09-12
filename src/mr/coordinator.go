@@ -56,8 +56,8 @@ func (c *Coordinator) searchForNewTask() (task *MapTask, taskNumber int, found b
 }
 
 func (c *Coordinator) MarkTaskAsCompleted(args *TaskCompletedRequest, reply *TaskCompletedResponse) error {
-	log.Printf("Marking map task %v as completed", args.taskNumber)
-	c.mapTasks[args.taskNumber].status = Completed
+	log.Printf("Marking map task %v as completed", args.TaskNumber)
+	c.mapTasks[args.TaskNumber].status = Completed
 	return nil
 }
 
