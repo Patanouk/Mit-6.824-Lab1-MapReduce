@@ -2,6 +2,7 @@ package mr
 
 import (
 	"log"
+	"sync"
 	"time"
 )
 import "net"
@@ -11,6 +12,7 @@ import "net/http"
 
 type Coordinator struct {
 	mapTasks []MapTask
+	lock     *sync.RWMutex
 }
 
 type MapTask struct {
@@ -36,7 +38,10 @@ func (c *Coordinator) RequestTask(args *TaskRequest, reply *TaskResponse) error 
 			reply.FileName = task.fileName
 			reply.NReduce = task.nReduce
 
+			c.lock.Lock()
 			c.mapTasks[taskNumber].status = InProgress
+			c.lock.Unlock()
+
 			return nil
 		} else {
 			time.Sleep(time.Second)
@@ -45,6 +50,9 @@ func (c *Coordinator) RequestTask(args *TaskRequest, reply *TaskResponse) error 
 }
 
 func (c *Coordinator) searchForNewTask() (task *MapTask, taskNumber int, found bool) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
 	for i, task := range c.mapTasks {
 		if task.status == Idle {
 			log.Printf("Sending map task %v to a worker", task)
@@ -56,6 +64,9 @@ func (c *Coordinator) searchForNewTask() (task *MapTask, taskNumber int, found b
 }
 
 func (c *Coordinator) MarkTaskAsCompleted(args *TaskCompletedRequest, reply *TaskCompletedResponse) error {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
 	log.Printf("Marking map task %v as completed", args.TaskNumber)
 	c.mapTasks[args.TaskNumber].status = Completed
 	return nil
@@ -73,7 +84,7 @@ func MakeCoordinator(files []string, nReduce int) *Coordinator {
 	}
 	log.Printf("Created %d map tasks", len(files))
 
-	c := Coordinator{mapTasks: mapTasks}
+	c := Coordinator{mapTasks: mapTasks, lock: &sync.RWMutex{}}
 	c.server()
 	return &c
 }
@@ -99,6 +110,9 @@ func (c *Coordinator) server() {
 // if the entire job has finished.
 //
 func (c *Coordinator) Done() bool {
+	c.lock.RLock()
+	c.lock.RUnlock()
+
 	completed := allTasksCompleted(c.mapTasks)
 	if completed {
 		log.Printf("All tasks completed. Shutting down coordinator")
