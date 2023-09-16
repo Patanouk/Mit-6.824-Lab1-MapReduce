@@ -42,6 +42,7 @@ const (
 func (c *Coordinator) RequestTask(args *TaskRequest, reply *TaskResponse) error {
 	for {
 		if task, taskNumber, found := c.searchForMapTask(); found == true {
+			log.Printf("Sending map task %v to a worker", task)
 			reply.TaskNumber = taskNumber
 			reply.FileName = task.fileName
 			reply.NReduce = task.nReduce
@@ -54,6 +55,8 @@ func (c *Coordinator) RequestTask(args *TaskRequest, reply *TaskResponse) error 
 			time.AfterFunc(DefaultTimeout, func() { unlockMapTaskIfNecessary(&c.mapTasks[taskNumber]) })
 			return nil
 		} else if task, taskNumber, found := c.searchForReduceTask(); c.allMapTasksCompleted() && found == true {
+			log.Printf("Sending reduce task %v to a worker", task)
+
 			reply.TaskNumber = taskNumber
 			reply.TaskType = Reduce
 			reply.ReduceFileList = task.fileNames
@@ -89,7 +92,6 @@ func (c *Coordinator) searchForMapTask() (task *MapTask, taskNumber int, found b
 
 	for i, task := range c.mapTasks {
 		if task.status == Idle {
-			log.Printf("Sending map task %v to a worker", task)
 			return &task, i, true
 		}
 	}
@@ -103,7 +105,6 @@ func (c *Coordinator) searchForReduceTask() (*ReduceTask, int, bool) {
 
 	for i, task := range c.reduceTasks {
 		if task.status == Idle {
-			log.Printf("Sending reduce task %v to a worker", task)
 			return &task, i, true
 		}
 	}
