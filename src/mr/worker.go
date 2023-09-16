@@ -42,7 +42,6 @@ func MarkMapTaskAsCompleted(task *TaskResponse, reduceFiles []string) {
 }
 
 func MarkReduceTaskAsCompleted(task *TaskResponse) {
-	log.Printf("Marking reduce task %v as completed", task.TaskNumber)
 	request := TaskCompletedRequest{TaskType: task.TaskType, TaskNumber: task.TaskNumber}
 	reply := TaskCompletedResponse{}
 	call("Coordinator.MarkTaskAsCompleted", &request, &reply)
@@ -79,7 +78,7 @@ func runReduceTask(task *TaskResponse, reducef func(string, []string) string) st
 }
 
 func writeReduceResultToFile(number int, reduceResult map[string]string) string {
-	log.Printf("Writing the reduce task %v result to file", number)
+	log.Printf("Writing the reduce task %v result to file, result %v", number, reduceResult)
 	file, err := os.Create(fmt.Sprintf("mr-out-%d", number))
 	if err != nil {
 		log.Fatalf("Failed to open file %v, err %v", file, err)
