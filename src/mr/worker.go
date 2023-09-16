@@ -18,11 +18,12 @@ func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string)
 		switch task.TaskType {
 		case Map:
 			reduceFiles := runMapTask(task, mapf)
-			MarkTaskAsCompleted(task, reduceFiles)
+			MarkMapTaskAsCompleted(task, reduceFiles)
 
 		case Reduce:
 			log.Printf("Received reduce task %v", task)
 			runReduceTask(task, reducef)
+			MarkReduceTaskAsCompleted(task)
 		}
 	}
 }
@@ -35,8 +36,14 @@ func RequestTask() *TaskResponse {
 	return &response
 }
 
-func MarkTaskAsCompleted(task *TaskResponse, reduceFiles []string) {
+func MarkMapTaskAsCompleted(task *TaskResponse, reduceFiles []string) {
 	request := TaskCompletedRequest{task.TaskType, task.TaskNumber, reduceFiles}
+	reply := TaskCompletedResponse{}
+	call("Coordinator.MarkTaskAsCompleted", &request, &reply)
+}
+
+func MarkReduceTaskAsCompleted(task *TaskResponse) {
+	request := TaskCompletedRequest{TaskType: task.TaskType, TaskNumber: task.TaskNumber}
 	reply := TaskCompletedResponse{}
 	call("Coordinator.MarkTaskAsCompleted", &request, &reply)
 }

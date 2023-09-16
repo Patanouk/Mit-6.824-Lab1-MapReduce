@@ -16,8 +16,9 @@ type TaskResponse struct {
 }
 
 type TaskCompletedRequest struct {
-	TaskType    TaskType
-	TaskNumber  int
+	TaskType   TaskType
+	TaskNumber int
+	//This field is only populated in case of a map task response
 	ReduceFiles []string
 }
 

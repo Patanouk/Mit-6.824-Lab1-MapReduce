@@ -122,7 +122,9 @@ func (c *Coordinator) MarkTaskAsCompleted(args *TaskCompletedRequest, reply *Tas
 		for i, reduceFile := range args.ReduceFiles {
 			c.reduceTasks[i].fileNames = append(c.reduceTasks[i].fileNames, reduceFile)
 		}
-
+	case Reduce:
+		log.Printf("Marking reduce task %v as completed", args.TaskNumber)
+		c.reduceTasks[args.TaskNumber].status = Completed
 	}
 	return nil
 }
