@@ -1,6 +1,7 @@
 package mr
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -21,6 +22,7 @@ func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string)
 
 		case Reduce:
 			log.Printf("Received reduce task %v", task)
+			runReduceTask(task, reducef)
 		}
 	}
 }
@@ -37,6 +39,51 @@ func MarkTaskAsCompleted(task *TaskResponse, reduceFiles []string) {
 	request := TaskCompletedRequest{task.TaskType, task.TaskNumber, reduceFiles}
 	reply := TaskCompletedResponse{}
 	call("Coordinator.MarkTaskAsCompleted", &request, &reply)
+}
+
+func runReduceTask(task *TaskResponse, reducef func(string, []string) string) string {
+	accumulatedResults := make(map[string][]string)
+	reduceResult := make(map[string]string)
+
+	for _, reduceFileName := range task.ReduceFileList {
+		reduceFile, err := os.Open(reduceFileName)
+		if err != nil {
+			log.Fatalf("Failed to open file %v, err %v", reduceFileName, reduceFile)
+		}
+
+		scanner := bufio.NewScanner(reduceFile)
+		for scanner.Scan() {
+			var keyValue KeyValue
+			text := scanner.Text()
+			err := json.Unmarshal([]byte(text), &keyValue)
+			if err != nil {
+				log.Fatalf("Failed to unmarshal line %v to KeyValue", text)
+			}
+
+			accumulatedResults[keyValue.Key] = append(accumulatedResults[keyValue.Key], keyValue.Value)
+			reduceResult[keyValue.Key] = reducef(keyValue.Key, accumulatedResults[keyValue.Key])
+		}
+
+		reduceFile.Close()
+	}
+
+	return writeReduceResultToFile(task.TaskNumber, reduceResult)
+}
+
+func writeReduceResultToFile(number int, reduceResult map[string]string) string {
+	file, err := os.Open(fmt.Sprintf("mr-out-%d", number))
+	if err != nil {
+		log.Fatalf("Failed to open file %v, err %v", file, err)
+	}
+
+	for key, value := range reduceResult {
+		_, err := file.Write([]byte(fmt.Sprintf("%v %v\n", key, value)))
+		if err != nil {
+			log.Fatalf("Failed to write to file %v", file)
+		}
+	}
+
+	return file.Name()
 }
 
 func runMapTask(task *TaskResponse, mapf func(string, string) []KeyValue) []string {
