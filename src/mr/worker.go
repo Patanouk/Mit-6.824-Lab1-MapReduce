@@ -21,7 +21,6 @@ func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string)
 			MarkMapTaskAsCompleted(task, reduceFiles)
 
 		case Reduce:
-			log.Printf("Received reduce task %v", task)
 			runReduceTask(task, reducef)
 			MarkReduceTaskAsCompleted(task)
 		}
@@ -43,12 +42,14 @@ func MarkMapTaskAsCompleted(task *TaskResponse, reduceFiles []string) {
 }
 
 func MarkReduceTaskAsCompleted(task *TaskResponse) {
+	log.Printf("Marking reduce task %v as completed", task.TaskNumber)
 	request := TaskCompletedRequest{TaskType: task.TaskType, TaskNumber: task.TaskNumber}
 	reply := TaskCompletedResponse{}
 	call("Coordinator.MarkTaskAsCompleted", &request, &reply)
 }
 
 func runReduceTask(task *TaskResponse, reducef func(string, []string) string) string {
+	log.Printf("Running reduce task %d", task.TaskNumber)
 	accumulatedResults := make(map[string][]string)
 	reduceResult := make(map[string]string)
 
@@ -78,7 +79,8 @@ func runReduceTask(task *TaskResponse, reducef func(string, []string) string) st
 }
 
 func writeReduceResultToFile(number int, reduceResult map[string]string) string {
-	file, err := os.Open(fmt.Sprintf("mr-out-%d", number))
+	log.Printf("Writing the reduce task %v result to file", number)
+	file, err := os.Create(fmt.Sprintf("mr-out-%d", number))
 	if err != nil {
 		log.Fatalf("Failed to open file %v, err %v", file, err)
 	}
