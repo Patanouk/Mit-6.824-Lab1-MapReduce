@@ -49,7 +49,7 @@ func MarkReduceTaskAsCompleted(task *TaskResponse) {
 
 func runReduceTask(task *TaskResponse, reducef func(string, []string) string) string {
 	log.Printf("Running reduce task %d", task.TaskNumber)
-	accumulatedResults := make(map[string][]string)
+	accumulatedValues := make(map[string][]string)
 	reduceResult := make(map[string]string)
 
 	for _, reduceFileName := range task.ReduceFileList {
@@ -67,11 +67,14 @@ func runReduceTask(task *TaskResponse, reducef func(string, []string) string) st
 				log.Fatalf("Failed to unmarshal line %v to KeyValue", text)
 			}
 
-			accumulatedResults[keyValue.Key] = append(accumulatedResults[keyValue.Key], keyValue.Value)
-			reduceResult[keyValue.Key] = reducef(keyValue.Key, accumulatedResults[keyValue.Key])
+			accumulatedValues[keyValue.Key] = append(accumulatedValues[keyValue.Key], keyValue.Value)
 		}
 
 		reduceFile.Close()
+	}
+
+	for key, values := range accumulatedValues {
+		reduceResult[key] = reducef(key, values)
 	}
 
 	return writeReduceResultToFile(task.TaskNumber, reduceResult)
