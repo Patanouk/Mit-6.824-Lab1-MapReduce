@@ -28,7 +28,7 @@ type TaskCompletedResponse struct {
 type TaskType int
 
 const (
-	Map TaskType = iota
+	Map TaskType = 1 << iota
 	Reduce
 )
 

@@ -23,6 +23,8 @@ func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string)
 		case Reduce:
 			runReduceTask(task, reducef)
 			MarkReduceTaskAsCompleted(task)
+		default:
+			log.Printf("Unknown task %v", task)
 		}
 	}
 }
@@ -94,6 +96,7 @@ func writeReduceResultToFile(number int, reduceResult map[string]string) string 
 		}
 	}
 
+	file.Sync()
 	return file.Name()
 }
 

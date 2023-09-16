@@ -52,7 +52,7 @@ func (c *Coordinator) RequestTask(args *TaskRequest, reply *TaskResponse) error 
 			c.mapTasks[taskNumber].status = InProgress
 			c.lock.Unlock()
 
-			time.AfterFunc(DefaultTimeout, func() { unlockMapTaskIfNecessary(&c.mapTasks[taskNumber]) })
+			time.AfterFunc(DefaultTimeout, func() { c.unlockMapTaskIfNecessary(taskNumber) })
 			return nil
 		} else if task, taskNumber, found := c.searchForReduceTask(); c.allMapTasksCompleted() && found == true {
 			log.Printf("Sending reduce task %v to a worker", task)
@@ -65,7 +65,7 @@ func (c *Coordinator) RequestTask(args *TaskRequest, reply *TaskResponse) error 
 			c.reduceTasks[taskNumber].status = InProgress
 			c.lock.Unlock()
 
-			time.AfterFunc(DefaultTimeout, func() { unlockReduceTaskIfNecessary(&c.reduceTasks[taskNumber]) })
+			time.AfterFunc(DefaultTimeout, func() { c.unlockReduceTaskIfNecessary(taskNumber) })
 			return nil
 		} else {
 			log.Printf("No new task to give. Will search again in one second")
@@ -74,15 +74,21 @@ func (c *Coordinator) RequestTask(args *TaskRequest, reply *TaskResponse) error 
 	}
 }
 
-func unlockReduceTaskIfNecessary(task *ReduceTask) {
-	if task.status == InProgress {
-		task.status = Idle
+func (c *Coordinator) unlockReduceTaskIfNecessary(taskNumber int) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	if c.reduceTasks[taskNumber].status == InProgress {
+		c.reduceTasks[taskNumber].status = Idle
 	}
 }
 
-func unlockMapTaskIfNecessary(task *MapTask) {
-	if task.status == InProgress {
-		task.status = Idle
+func (c *Coordinator) unlockMapTaskIfNecessary(taskNumber int) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	if c.mapTasks[taskNumber].status == InProgress {
+		c.mapTasks[taskNumber].status = Idle
 	}
 }
 
@@ -175,7 +181,7 @@ func (c *Coordinator) server() {
 //
 func (c *Coordinator) Done() bool {
 	c.lock.RLock()
-	c.lock.RUnlock()
+	defer c.lock.RUnlock()
 
 	completed := c.allMapTasksCompleted() && c.allReduceTasksCompleted()
 	if completed {
@@ -186,6 +192,9 @@ func (c *Coordinator) Done() bool {
 }
 
 func (c *Coordinator) allMapTasksCompleted() bool {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
 	for _, value := range c.mapTasks {
 		if value.status != Completed {
 			return false
